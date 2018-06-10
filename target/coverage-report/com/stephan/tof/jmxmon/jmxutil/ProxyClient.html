@@ -1,0 +1,3893 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ProxyClient.java</title>
+  <meta http-equiv='Content-Type' content='text/html; charset=UTF-8'/>
+  <link rel='stylesheet' type='text/css' href='../../../../../coverage.css'/>
+  <link rel='shortcut icon' type='image/png' href='../../../../../logo.png'/>
+  <script type='text/javascript' src='../../../../../coverage.js'></script>
+  <script type='text/javascript' src='../../../../../prettify.js'></script>
+</head>
+<body onload='prettyPrint()'>
+  <table cellpadding='0' cellspacing='1'>
+    <caption>jmxmon/src/main/java/com/stephan/tof/jmxmon/jmxutil/ProxyClient.java</caption>
+    <tr>
+      <td class='line'></td><td>&nbsp;</td>
+      <td class='comment' onclick='showHideLines(this)'><div>/*
+ * %W% %E%
+ *
+ * Copyright (c) 2006, Oracle and/or its affiliates. All rights reserved.
+ * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
+ */</div><span>/*...*/</span></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>8</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>package com.stephan.tof.jmxmon.jmxutil;</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'></td><td>&nbsp;</td>
+      <td><pre class='imports prettyprint' onclick='showHideLines(this)'><div>import static java.lang.management.ManagementFactory.CLASS_LOADING_MXBEAN_NAME;
+import static java.lang.management.ManagementFactory.COMPILATION_MXBEAN_NAME;
+import static java.lang.management.ManagementFactory.GARBAGE_COLLECTOR_MXBEAN_DOMAIN_TYPE;
+import static java.lang.management.ManagementFactory.MEMORY_MXBEAN_NAME;
+import static java.lang.management.ManagementFactory.MEMORY_POOL_MXBEAN_DOMAIN_TYPE;
+import static java.lang.management.ManagementFactory.OPERATING_SYSTEM_MXBEAN_NAME;
+import static java.lang.management.ManagementFactory.RUNTIME_MXBEAN_NAME;
+import static java.lang.management.ManagementFactory.THREAD_MXBEAN_NAME;
+import static java.lang.management.ManagementFactory.newPlatformMXBeanProxy;
+
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.io.IOException;
+import java.lang.management.BufferPoolMXBean;
+import java.lang.management.ClassLoadingMXBean;
+import java.lang.management.CompilationMXBean;
+import java.lang.management.GarbageCollectorMXBean;
+import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryMXBean;
+import java.lang.management.OperatingSystemMXBean;
+import java.lang.management.RuntimeMXBean;
+import java.lang.management.ThreadMXBean;
+import java.lang.ref.WeakReference;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.rmi.NotBoundException;
+import java.rmi.Remote;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+import java.rmi.server.RMIClientSocketFactory;
+import java.rmi.server.RemoteObject;
+import java.rmi.server.RemoteObjectInvocationHandler;
+import java.rmi.server.RemoteRef;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+
+import javax.management.Attribute;
+import javax.management.AttributeList;
+import javax.management.AttributeNotFoundException;
+import javax.management.InstanceNotFoundException;
+import javax.management.IntrospectionException;
+import javax.management.InvalidAttributeValueException;
+import javax.management.MBeanException;
+import javax.management.MBeanInfo;
+import javax.management.MBeanOperationInfo;
+import javax.management.MBeanServerConnection;
+import javax.management.MalformedObjectNameException;
+import javax.management.ObjectName;
+import javax.management.ReflectionException;
+import javax.management.remote.JMXConnector;
+import javax.management.remote.JMXConnectorFactory;
+import javax.management.remote.JMXServiceURL;
+import javax.management.remote.rmi.RMIConnector;
+import javax.management.remote.rmi.RMIServer;
+import javax.rmi.ssl.SslRMIClientSocketFactory;
+import javax.swing.event.SwingPropertyChangeSupport;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import sun.rmi.server.UnicastRef2;
+import sun.rmi.transport.LiveRef;
+
+import com.sun.management.HotSpotDiagnosticMXBean;
+</div><span>import ...</span></pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>85</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>public class ProxyClient implements JConsoleContext {</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>87</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>	private static Logger logger = LoggerFactory.getLogger(ProxyClient.class);</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>89</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private ConnectionState connectionState = ConnectionState.DISCONNECTED;</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>91</td><td>&nbsp;</td>
+      <td><pre class='comment'>    // The SwingPropertyChangeSupport will fire events on the EDT</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>92</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private SwingPropertyChangeSupport propertyChangeSupport =</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>93</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                                new SwingPropertyChangeSupport(this, true);</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>95</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private static Map&lt;String, ProxyClient> cache =</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>96</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        Collections.synchronizedMap(new HashMap&lt;String, ProxyClient>());</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>98</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private volatile boolean isDead = true;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>99</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private String hostName = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>100</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private int port = 0;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>101</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private String userName = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>102</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private String password = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>103</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private boolean hasPlatformMXBeans = false;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>104</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private boolean hasHotSpotDiagnosticMXBean= false;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>105</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private boolean hasCompilationMXBean = false;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>106</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private boolean supportsLockUsage = false;</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>108</td><td>&nbsp;</td>
+      <td><pre class='comment'>    // REVISIT: VMPanel and other places relying using getUrl().</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>110</td><td>&nbsp;</td>
+      <td><pre class='comment'>    // set only if it's created for local monitoring</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>111</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private LocalVirtualMachine lvm;</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>113</td><td>&nbsp;</td>
+      <td><pre class='comment'>    // set only if it's created from a given URL via the Advanced tab</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>114</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private String advancedUrl = null;</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>116</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private JMXServiceURL jmxUrl = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>117</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private MBeanServerConnection mbsc = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>118</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private SnapshotMBeanServerConnection server = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>119</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private JMXConnector jmxc = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>120</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private RMIServer stub = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>121</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private static final SslRMIClientSocketFactory sslRMIClientSocketFactory =</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>122</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            new SslRMIClientSocketFactory();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>123</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private String registryHostName = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>124</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private int registryPort = 0;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>125</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private boolean vmConnector = false;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>126</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private boolean sslRegistry = false;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>127</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private boolean sslStub = false;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>128</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    final private String connectionName;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>129</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    final private String displayName;</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>131</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private ClassLoadingMXBean    classLoadingMBean = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>132</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private CompilationMXBean     compilationMBean = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>133</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private MemoryMXBean          memoryMBean = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>134</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private OperatingSystemMXBean operatingSystemMBean = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>135</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private RuntimeMXBean         runtimeMBean = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>136</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private ThreadMXBean          threadMBean = null;</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>138</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private com.sun.management.OperatingSystemMXBean sunOperatingSystemMXBean = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>139</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private HotSpotDiagnosticMXBean                  hotspotDiagnosticMXBean = null;</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>141</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private List&lt;MemoryPoolProxy>           memoryPoolProxies = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>142</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private List&lt;GarbageCollectorMXBean>    garbageCollectorMBeans = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>143</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private List&lt;BufferPoolMXBean>    		bufferPoolMXBeans = null;</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>146</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    final static private String HOTSPOT_DIAGNOSTIC_MXBEAN_NAME =</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>147</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        "com.sun.management:type=HotSpotDiagnostic";</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>149</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private ProxyClient(String hostName, int port,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>150</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                        String userName, String password) throws IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>151</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        this.connectionName = getConnectionName(hostName, port, userName);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>152</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        this.displayName = connectionName;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>153</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (hostName.equals("localhost") && port == 0) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>154</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // Monitor self</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>155</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            this.hostName = hostName;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>156</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            this.port = port;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>157</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } else {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>158</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // Create an RMI connector client and connect it to</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>159</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // the RMI connector server</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>160</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            final String urlPath = "/jndi/rmi://" + hostName + ":" + port +</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>161</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                                   "/jmxrmi";</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>162</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            JMXServiceURL url = new JMXServiceURL("rmi", "", 0, urlPath);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>163</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            setParameters(url, userName, password);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>164</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            vmConnector = true;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>165</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            registryHostName = hostName;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>166</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            registryPort = port;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>167</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            checkSslConfig();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>168</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>169</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>171</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private ProxyClient(String url,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>172</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                        String userName, String password) throws IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>173</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        this.advancedUrl = url;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>174</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        this.connectionName = getConnectionName(url, userName);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>175</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        this.displayName = connectionName;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>176</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        setParameters(new JMXServiceURL(url), userName, password);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>177</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>179</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private ProxyClient(LocalVirtualMachine lvm) throws IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>180</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        this.lvm = lvm;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>181</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        this.connectionName = getConnectionName(lvm);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>182</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        this.displayName = "pid: " + lvm.vmid() + " " + lvm.displayName();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>183</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>185</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private void setParameters(JMXServiceURL url, String userName, String password) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>186</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        this.jmxUrl = url;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>187</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        this.hostName = jmxUrl.getHost();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>188</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        this.port = jmxUrl.getPort();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>189</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        this.userName = userName;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>190</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        this.password = password;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>191</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>193</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private static void checkStub(Remote stub,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>194</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                                  Class&lt;? extends Remote> stubClass) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>195</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // Check remote stub is from the expected class.</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>196</td><td>&nbsp;</td>
+      <td><pre class='comment'>        //</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>197</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (stub.getClass() != stubClass) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>198</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            if (!Proxy.isProxyClass(stub.getClass())) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>199</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                throw new SecurityException(</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>200</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    "Expecting a " + stubClass.getName() + " stub!");</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>201</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            } else {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>202</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                InvocationHandler handler = Proxy.getInvocationHandler(stub);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>203</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                if (handler.getClass() != RemoteObjectInvocationHandler.class) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>204</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    throw new SecurityException(</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>205</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                        "Expecting a dynamic proxy instance with a " +</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>206</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                        RemoteObjectInvocationHandler.class.getName() +</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>207</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                        " invocation handler!");</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>208</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                } else {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>209</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    stub = (Remote) handler;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>210</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>211</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>212</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>213</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // Check RemoteRef in stub is from the expected class</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>214</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // "sun.rmi.server.UnicastRef2".</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>215</td><td>&nbsp;</td>
+      <td><pre class='comment'>        //</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>216</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        RemoteRef ref = ((RemoteObject)stub).getRef();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>217</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (ref.getClass() != UnicastRef2.class) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>218</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            throw new SecurityException(</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>219</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                "Expecting a " + UnicastRef2.class.getName() +</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>220</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                " remote reference in stub!");</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>221</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>222</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // Check RMIClientSocketFactory in stub is from the expected class</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>223</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // "javax.rmi.ssl.SslRMIClientSocketFactory".</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>224</td><td>&nbsp;</td>
+      <td><pre class='comment'>        //</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>225</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        LiveRef liveRef = ((UnicastRef2)ref).getLiveRef();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>226</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        RMIClientSocketFactory csf = liveRef.getClientSocketFactory();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>227</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (csf == null || csf.getClass() != SslRMIClientSocketFactory.class) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>228</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            throw new SecurityException(</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>229</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                "Expecting a " + SslRMIClientSocketFactory.class.getName() +</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>230</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                " RMI client socket factory in stub!");</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>231</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>232</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>234</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private static final String rmiServerImplStubClassName =</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>235</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        "javax.management.remote.rmi.RMIServerImpl_Stub";</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>236</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private static final Class&lt;? extends Remote> rmiServerImplStubClass;</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>238</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    static {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>239</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // FIXME: RMIServerImpl_Stub is generated at build time</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>240</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // after jconsole is built.  We need to investigate if</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>241</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // the Makefile can be fixed to build jconsole in the</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>242</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // right order.  As a workaround for now, we dynamically</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>243</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // load RMIServerImpl_Stub class instead of statically</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>244</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // referencing it.</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>245</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        Class&lt;? extends Remote> serverStubClass = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>246</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        try {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>247</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            serverStubClass = Class.forName(rmiServerImplStubClassName).asSubclass(Remote.class);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>248</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } catch (ClassNotFoundException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>249</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // should never reach here</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>250</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            throw (InternalError) new InternalError(e.getMessage()).initCause(e);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>251</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>252</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        rmiServerImplStubClass = serverStubClass;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>253</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>255</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private void checkSslConfig() throws IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>256</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // Get the reference to the RMI Registry and lookup RMIServer stub</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>257</td><td>&nbsp;</td>
+      <td><pre class='comment'>        //</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>258</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        Registry registry;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>259</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        try {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>260</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            registry =</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>261</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                LocateRegistry.getRegistry(registryHostName, registryPort,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>262</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                                           sslRMIClientSocketFactory);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>263</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            try {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>264</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                stub = (RMIServer) registry.lookup("jmxrmi");</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>265</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            } catch (NotBoundException nbe) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>266</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                throw (IOException)</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>267</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    new IOException(nbe.getMessage()).initCause(nbe);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>268</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>269</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            sslRegistry = true;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>270</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } catch (IOException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>271</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            registry =</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>272</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                LocateRegistry.getRegistry(registryHostName, registryPort);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>273</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            try {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>274</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                stub = (RMIServer) registry.lookup("jmxrmi");</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>275</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            } catch (NotBoundException nbe) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>276</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                throw (IOException)</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>277</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    new IOException(nbe.getMessage()).initCause(nbe);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>278</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>279</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            sslRegistry = false;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>280</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>281</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // Perform the checks for secure stub</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>282</td><td>&nbsp;</td>
+      <td><pre class='comment'>        //</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>283</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        try {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>284</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            checkStub(stub, rmiServerImplStubClass);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>285</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            sslStub = true;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>286</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } catch (SecurityException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>287</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            sslStub = false;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>288</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>289</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'></td><td>&nbsp;</td>
+      <td class='comment' onclick='showHideLines(this)'><div>    /**
+     * Returns true if the underlying RMI registry is SSL-protected.
+     *
+     * @exception UnsupportedOperationException If this {@code ProxyClient}
+     * does not denote a JMX connector for a JMX VM agent.
+     */</div><span>    /*...*/</span></td>
+    </tr>
+    <tr>
+      <td class='line'>297</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public boolean isSslRmiRegistry() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>298</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // Check for VM connector</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>299</td><td>&nbsp;</td>
+      <td><pre class='comment'>        //</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>300</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (!isVmConnector()) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>301</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            throw new UnsupportedOperationException(</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>302</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                "ProxyClient.isSslRmiRegistry() is only supported if this " +</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>303</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                "ProxyClient is a JMX connector for a JMX VM agent");</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>304</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>305</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return sslRegistry;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>306</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'></td><td>&nbsp;</td>
+      <td class='comment' onclick='showHideLines(this)'><div>    /**
+     * Returns true if the retrieved RMI stub is SSL-protected.
+     *
+     * @exception UnsupportedOperationException If this {@code ProxyClient}
+     * does not denote a JMX connector for a JMX VM agent.
+     */</div><span>    /*...*/</span></td>
+    </tr>
+    <tr>
+      <td class='line'>314</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public boolean isSslRmiStub() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>315</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // Check for VM connector</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>316</td><td>&nbsp;</td>
+      <td><pre class='comment'>        //</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>317</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (!isVmConnector()) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>318</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            throw new UnsupportedOperationException(</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>319</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                "ProxyClient.isSslRmiStub() is only supported if this " +</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>320</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                "ProxyClient is a JMX connector for a JMX VM agent");</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>321</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>322</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return sslStub;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>323</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'></td><td>&nbsp;</td>
+      <td class='comment' onclick='showHideLines(this)'><div>    /**
+     * Returns true if this {@code ProxyClient} denotes
+     * a JMX connector for a JMX VM agent.
+     */</div><span>    /*...*/</span></td>
+    </tr>
+    <tr>
+      <td class='line'>329</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public boolean isVmConnector() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>330</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return vmConnector;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>331</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>333</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private void setConnectionState(ConnectionState state) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>334</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        ConnectionState oldState = this.connectionState;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>335</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        this.connectionState = state;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>336</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        propertyChangeSupport.firePropertyChange(CONNECTION_STATE_PROPERTY,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>337</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                                                 oldState, state);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>338</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>340</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public ConnectionState getConnectionState() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>341</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return this.connectionState;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>342</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>344</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    void flush() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>345</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (server != null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>346</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            server.flush();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>347</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>348</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>350</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public void connect() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>351</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        setConnectionState(ConnectionState.CONNECTING);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>352</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        try {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>353</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            tryConnect();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>354</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            setConnectionState(ConnectionState.CONNECTED);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>355</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } catch (Exception e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>356</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            setConnectionState(ConnectionState.DISCONNECTED);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>357</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            throw new IllegalStateException(e);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>358</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>359</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>361</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private void tryConnect() throws IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>362</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (jmxUrl == null && "localhost".equals(hostName) && port == 0) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>363</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // Monitor self</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>364</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            this.jmxc = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>365</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            this.mbsc = ManagementFactory.getPlatformMBeanServer();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>366</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            this.server = Snapshot.newSnapshot(mbsc);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>367</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } else {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>368</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // Monitor another process</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>369</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            if (lvm != null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>370</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                if (!lvm.isManageable()) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>371</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    lvm.startManagementAgent();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>372</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    if (!lvm.isManageable()) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>373</td><td>&nbsp;</td>
+      <td><pre class='comment'>                        // FIXME: what to throw</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>374</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                        throw new IOException(lvm + "not manageable");</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>375</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>376</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>377</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                if (this.jmxUrl == null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>378</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    this.jmxUrl = new JMXServiceURL(lvm.connectorAddress());</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>379</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>380</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>381</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // Need to pass in credentials ?</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>382</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            if (userName == null && password == null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>383</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                if (isVmConnector()) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>384</td><td>&nbsp;</td>
+      <td><pre class='comment'>                    // Check for SSL config on reconnection only</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>385</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    if (stub == null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>386</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                        checkSslConfig();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>387</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>388</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    this.jmxc = new RMIConnector(stub, null);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>389</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    jmxc.connect();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>390</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                } else {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>391</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    this.jmxc = JMXConnectorFactory.connect(jmxUrl);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>392</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>393</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            } else {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>394</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                Map&lt;String, String[]> env = new HashMap&lt;String, String[]>();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>395</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                env.put(JMXConnector.CREDENTIALS,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>396</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                        new String[] {userName, password});</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>397</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                if (isVmConnector()) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>398</td><td>&nbsp;</td>
+      <td><pre class='comment'>                    // Check for SSL config on reconnection only</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>399</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    if (stub == null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>400</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                        checkSslConfig();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>401</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>402</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    this.jmxc = new RMIConnector(stub, null);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>403</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    jmxc.connect(env);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>404</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                } else {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>405</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    this.jmxc = JMXConnectorFactory.connect(jmxUrl, env);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>406</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>407</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>408</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            this.mbsc = jmxc.getMBeanServerConnection();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>409</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            this.server = Snapshot.newSnapshot(mbsc);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>410</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>411</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        this.isDead = false;</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>413</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        try {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>414</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            ObjectName on = new ObjectName(THREAD_MXBEAN_NAME);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>415</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            this.hasPlatformMXBeans = server.isRegistered(on);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>416</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            this.hasHotSpotDiagnosticMXBean =</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>417</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                server.isRegistered(new ObjectName(HOTSPOT_DIAGNOSTIC_MXBEAN_NAME));</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>418</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // check if it has 6.0 new APIs</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>419</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            if (this.hasPlatformMXBeans) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>420</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                MBeanOperationInfo[] mopis = server.getMBeanInfo(on).getOperations();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>421</td><td>&nbsp;</td>
+      <td><pre class='comment'>                // look for findDeadlockedThreads operations;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>422</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                for (MBeanOperationInfo op : mopis) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>423</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    if (op.getName().equals("findDeadlockedThreads")) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>424</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                        this.supportsLockUsage = true;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>425</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                        break;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>426</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>427</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>429</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                on = new ObjectName(COMPILATION_MXBEAN_NAME);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>430</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                this.hasCompilationMXBean = server.isRegistered(on);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>431</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>432</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } catch (MalformedObjectNameException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>433</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // should not reach here</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>434</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            throw new InternalError(e.getMessage());</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>435</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } catch (IntrospectionException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>436</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            InternalError ie = new InternalError(e.getMessage());</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>437</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            ie.initCause(e);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>438</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            throw ie;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>439</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } catch (InstanceNotFoundException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>440</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            InternalError ie = new InternalError(e.getMessage());</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>441</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            ie.initCause(e);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>442</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            throw ie;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>443</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } catch (ReflectionException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>444</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            InternalError ie = new InternalError(e.getMessage());</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>445</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            ie.initCause(e);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>446</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            throw ie;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>447</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>449</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (hasPlatformMXBeans) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>450</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // WORKAROUND for bug 5056632</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>451</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // Check if the access role is correct by getting a RuntimeMXBean</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>452</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            getRuntimeMXBean();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>453</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>454</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'></td><td>&nbsp;</td>
+      <td class='comment' onclick='showHideLines(this)'><div>    /**
+     * Gets a proxy client for a given local virtual machine.
+     */</div><span>    /*...*/</span></td>
+    </tr>
+    <tr>
+      <td class='line'>459</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public static ProxyClient getProxyClient(LocalVirtualMachine lvm)</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>460</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        throws IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>461</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        final String key = getCacheKey(lvm);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>462</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        ProxyClient proxyClient = cache.get(key);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>463</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (proxyClient == null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>464</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            proxyClient = new ProxyClient(lvm);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>465</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            cache.put(key, proxyClient);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>466</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>467</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return proxyClient;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>468</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>470</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public static String getConnectionName(LocalVirtualMachine lvm) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>471</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return Integer.toString(lvm.vmid());</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>472</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>474</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private static String getCacheKey(LocalVirtualMachine lvm) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>475</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return Integer.toString(lvm.vmid());</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>476</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'></td><td>&nbsp;</td>
+      <td class='comment' onclick='showHideLines(this)'><div>    /**
+     * Gets a proxy client for a given JMXServiceURL.
+     */</div><span>    /*...*/</span></td>
+    </tr>
+    <tr>
+      <td class='line'>481</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public static ProxyClient getProxyClient(String url,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>482</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                                             String userName, String password)</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>483</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        throws IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>484</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        final String key = getCacheKey(url, userName, password);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>485</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        ProxyClient proxyClient = cache.get(key);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>486</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (proxyClient == null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>487</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            proxyClient = new ProxyClient(url, userName, password);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>488</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            cache.put(key, proxyClient);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>489</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>490</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return proxyClient;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>491</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>493</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public static String getConnectionName(String url,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>494</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                                           String userName) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>495</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (userName != null && userName.length() > 0) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>496</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            return userName + "@" + url;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>497</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } else {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>498</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            return url;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>499</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>500</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>502</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private static String getCacheKey(String url,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>503</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                                      String userName, String password) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>504</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return (url == null ? "" : url) + ":" +</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>505</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>               (userName == null ? "" : userName) + ":" +</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>506</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>               (password == null ? "" : password);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>507</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'></td><td>&nbsp;</td>
+      <td class='comment' onclick='showHideLines(this)'><div>    /**
+     * Gets a proxy client for a given "hostname:port".
+     */</div><span>    /*...*/</span></td>
+    </tr>
+    <tr>
+      <td class='line'>512</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public static ProxyClient getProxyClient(String hostName, int port,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>513</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                                             String userName, String password)</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>514</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        throws IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>515</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        final String key = getCacheKey(hostName, port, userName, password);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>516</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        ProxyClient proxyClient = cache.get(key);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>517</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (proxyClient == null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>518</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            proxyClient = new ProxyClient(hostName, port, userName, password);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>519</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            cache.put(key, proxyClient);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>520</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>521</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return cache.get(key);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>522</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>524</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public static String getConnectionName(String hostName, int port,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>525</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                                           String userName) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>526</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        String name = hostName + ":" + port;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>527</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (userName != null && userName.length() > 0) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>528</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            return userName + "@" + name;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>529</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } else {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>530</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            return name;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>531</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>532</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>534</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private static String getCacheKey(String hostName, int port,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>535</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                                      String userName, String password) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>536</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return (hostName == null ? "" : hostName) + ":" +</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>537</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>               port + ":" +</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>538</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>               (userName == null ? "" : userName) + ":" +</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>539</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>               (password == null ? "" : password);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>540</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>542</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public String connectionName() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>543</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return connectionName;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>544</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>546</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public String getDisplayName() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>547</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return displayName;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>548</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>550</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public String toString() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>551</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (!isConnected()) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>552</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        	return null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>553</td><td>&nbsp;</td>
+      <td><pre class='comment'>            //return Resources.getText("ConnectionName (disconnected)", displayName);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>554</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } else {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>555</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            return displayName;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>556</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>557</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>559</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public MBeanServerConnection getMBeanServerConnection() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>560</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return mbsc;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>561</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>563</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public SnapshotMBeanServerConnection getSnapshotMBeanServerConnection() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>564</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return server;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>565</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>567</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public String getUrl() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>568</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return advancedUrl;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>569</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>571</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public String getHostName() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>572</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return hostName;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>573</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>575</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public int getPort() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>576</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return port;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>577</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>579</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public int getVmid() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>580</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return (lvm != null) ? lvm.vmid() : 0;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>581</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>583</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public String getUserName() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>584</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return userName;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>585</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>587</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public String getPassword() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>588</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return password;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>589</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>591</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public void disconnect() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>592</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // Reset remote stub</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>593</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        stub = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>594</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // Close MBeanServer connection</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>595</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (jmxc != null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>596</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            try {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>597</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                jmxc.close();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>598</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            } catch (IOException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>599</td><td>&nbsp;</td>
+      <td><pre class='comment'>                // Ignore ???</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>600</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>601</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>602</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // Reset platform MBean references</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>603</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        classLoadingMBean = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>604</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        compilationMBean = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>605</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        memoryMBean = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>606</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        operatingSystemMBean = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>607</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        runtimeMBean = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>608</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        threadMBean = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>609</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        sunOperatingSystemMXBean = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>610</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        garbageCollectorMBeans = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>611</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        memoryPoolProxies = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>612</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // Set connection state to DISCONNECTED</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>613</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (!isDead) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>614</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            isDead = true;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>615</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            setConnectionState(ConnectionState.DISCONNECTED);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>616</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>617</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'></td><td>&nbsp;</td>
+      <td class='comment' onclick='showHideLines(this)'><div>    /**
+     * Returns the list of domains in which any MBean is
+     * currently registered.
+     */</div><span>    /*...*/</span></td>
+    </tr>
+    <tr>
+      <td class='line'>623</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public String[] getDomains() throws IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>624</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return server.getDomains();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>625</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'></td><td>&nbsp;</td>
+      <td class='comment' onclick='showHideLines(this)'><div>    /**
+     * Returns a map of MBeans with ObjectName as the key and MBeanInfo value
+     * of a given domain.  If domain is &lt;tt>null&lt;/tt>, all MBeans
+     * are returned.  If no MBean found, an empty map is returned.
+     *
+     */</div><span>    /*...*/</span></td>
+    </tr>
+    <tr>
+      <td class='line'>633</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public Map&lt;ObjectName, MBeanInfo> getMBeans(String domain)</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>634</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        throws IOException {</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>636</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        ObjectName name = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>637</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (domain != null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>638</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            try {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>639</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                name = new ObjectName(domain + ":*");</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>640</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            } catch (MalformedObjectNameException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>641</td><td>&nbsp;</td>
+      <td><pre class='comment'>                // should not reach here</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>642</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                assert(false);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>643</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>644</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>645</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        Set mbeans = server.queryNames(name, null);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>646</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        Map&lt;ObjectName,MBeanInfo> result =</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>647</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            new HashMap&lt;ObjectName,MBeanInfo>(mbeans.size());</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>648</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        Iterator iterator = mbeans.iterator();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>649</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        while (iterator.hasNext()) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>650</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            Object object = iterator.next();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>651</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            if (object instanceof ObjectName) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>652</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                ObjectName o = (ObjectName)object;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>653</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                try {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>654</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    MBeanInfo info = server.getMBeanInfo(o);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>655</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    result.put(o, info);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>656</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                } catch (IntrospectionException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>657</td><td>&nbsp;</td>
+      <td><pre class='comment'>                    // TODO: should log the error</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>658</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                	logger.error(e.getMessage(), e);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>659</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                } catch (InstanceNotFoundException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>660</td><td>&nbsp;</td>
+      <td><pre class='comment'>                    // TODO: should log the error</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>661</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                	logger.error(e.getMessage(), e);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>662</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                } catch (ReflectionException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>663</td><td>&nbsp;</td>
+      <td><pre class='comment'>                    // TODO: should log the error</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>664</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                	logger.error(e.getMessage(), e);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>665</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>666</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>667</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>668</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return result;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>669</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'></td><td>&nbsp;</td>
+      <td class='comment' onclick='showHideLines(this)'><div>    /**
+     * Returns a list of attributes of a named MBean.
+     *
+     */</div><span>    /*...*/</span></td>
+    </tr>
+    <tr>
+      <td class='line'>675</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public AttributeList getAttributes(ObjectName name, String[] attributes)</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>676</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        throws IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>677</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        AttributeList list = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>678</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        try {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>679</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            list = server.getAttributes(name, attributes);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>680</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } catch (InstanceNotFoundException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>681</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // TODO: A MBean may have been unregistered.</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>682</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // need to set up listener to listen for MBeanServerNotification.</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>683</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        	logger.error(e.getMessage(), e);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>684</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } catch (ReflectionException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>685</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // TODO: should log the error</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>686</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        	logger.error(e.getMessage(), e);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>687</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>688</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return list;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>689</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'></td><td>&nbsp;</td>
+      <td class='comment' onclick='showHideLines(this)'><div>    /**
+     * Set the value of a specific attribute of a named MBean.
+     */</div><span>    /*...*/</span></td>
+    </tr>
+    <tr>
+      <td class='line'>694</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public void setAttribute(ObjectName name, Attribute attribute)</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>695</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        throws InvalidAttributeValueException,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>696</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>               MBeanException,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>697</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>               IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>698</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        try {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>699</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            server.setAttribute(name, attribute);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>700</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } catch (InstanceNotFoundException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>701</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // TODO: A MBean may have been unregistered.</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>702</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        	logger.error(e.getMessage(), e);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>703</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } catch (AttributeNotFoundException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>704</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            throw new IllegalStateException(e);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>705</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } catch (ReflectionException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>706</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // TODO: should log the error</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>707</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        	logger.error(e.getMessage(), e);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>708</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>709</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'></td><td>&nbsp;</td>
+      <td class='comment' onclick='showHideLines(this)'><div>    /**
+     * Invokes an operation of a named MBean.
+     *
+     * @throws MBeanException Wraps an exception thrown by
+     *      the MBean's invoked method.
+     */</div><span>    /*...*/</span></td>
+    </tr>
+    <tr>
+      <td class='line'>717</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public Object invoke(ObjectName name, String operationName,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>718</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                         Object[] params, String[] signature)</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>719</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        throws IOException, MBeanException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>720</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        Object result = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>721</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        try {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>722</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            result = server.invoke(name, operationName, params, signature);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>723</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } catch (InstanceNotFoundException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>724</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // TODO: A MBean may have been unregistered.</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>725</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } catch (ReflectionException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>726</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // TODO: should log the error</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>727</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        	logger.error(e.getMessage(), e);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>728</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>729</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return result;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>730</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>732</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public synchronized ClassLoadingMXBean getClassLoadingMXBean() throws IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>733</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (hasPlatformMXBeans && classLoadingMBean == null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>734</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            classLoadingMBean =</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>735</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                newPlatformMXBeanProxy(server, CLASS_LOADING_MXBEAN_NAME,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>736</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                                       ClassLoadingMXBean.class);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>737</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>738</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return classLoadingMBean;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>739</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>741</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public synchronized CompilationMXBean getCompilationMXBean() throws IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>742</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (hasCompilationMXBean && compilationMBean == null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>743</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            compilationMBean =</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>744</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                newPlatformMXBeanProxy(server, COMPILATION_MXBEAN_NAME,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>745</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                                       CompilationMXBean.class);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>746</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>747</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return compilationMBean;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>748</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>750</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public Collection&lt;MemoryPoolProxy> getMemoryPoolProxies()</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>751</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        throws IOException {</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>753</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // TODO: How to deal with changes to the list??</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>754</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (memoryPoolProxies == null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>755</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            ObjectName poolName = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>756</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            try {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>757</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                poolName = new ObjectName(MEMORY_POOL_MXBEAN_DOMAIN_TYPE + ",*");</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>758</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            } catch (MalformedObjectNameException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>759</td><td>&nbsp;</td>
+      <td><pre class='comment'>                // should not reach here</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>760</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                assert(false);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>761</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>762</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            Set mbeans = server.queryNames(poolName, null);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>763</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            if (mbeans != null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>764</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                memoryPoolProxies = new ArrayList&lt;MemoryPoolProxy>();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>765</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                Iterator iterator = mbeans.iterator();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>766</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                while (iterator.hasNext()) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>767</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    ObjectName objName = (ObjectName) iterator.next();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>768</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    MemoryPoolProxy p = new MemoryPoolProxy(this, objName);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>769</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    memoryPoolProxies.add(p);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>770</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>771</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>772</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>773</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return memoryPoolProxies;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>774</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>777</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public synchronized Collection&lt;BufferPoolMXBean> getBufferPoolMXBeans()</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>778</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            throws IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>779</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    		String oName = "java.nio:type=BufferPool";</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>780</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // TODO: How to deal with changes to the list??</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>781</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            if (bufferPoolMXBeans == null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>782</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                ObjectName bpName = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>783</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                try {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>784</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    bpName = new ObjectName(oName + ",*");</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>785</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                } catch (MalformedObjectNameException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>786</td><td>&nbsp;</td>
+      <td><pre class='comment'>                    // should not reach here</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>787</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    assert(false);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>788</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>789</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                Set mbeans = server.queryNames(bpName, null);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>790</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                if (mbeans != null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>791</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                	bufferPoolMXBeans = new ArrayList&lt;BufferPoolMXBean>();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>792</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    Iterator iterator = mbeans.iterator();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>793</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    while (iterator.hasNext()) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>794</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                        ObjectName on = (ObjectName) iterator.next();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>795</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                        String name = oName +",name=" + on.getKeyProperty("name");</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>797</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                        BufferPoolMXBean mBean =</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>798</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                            newPlatformMXBeanProxy(server, name,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>799</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                            		BufferPoolMXBean.class);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>800</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                        bufferPoolMXBeans.add(mBean);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>801</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>802</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>803</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>804</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            return bufferPoolMXBeans;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>805</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>807</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public synchronized Collection&lt;GarbageCollectorMXBean> getGarbageCollectorMXBeans()</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>808</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        throws IOException {</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>810</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // TODO: How to deal with changes to the list??</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>811</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (garbageCollectorMBeans == null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>812</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            ObjectName gcName = null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>813</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            try {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>814</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                gcName = new ObjectName(GARBAGE_COLLECTOR_MXBEAN_DOMAIN_TYPE + ",*");</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>815</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            } catch (MalformedObjectNameException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>816</td><td>&nbsp;</td>
+      <td><pre class='comment'>                // should not reach here</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>817</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                assert(false);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>818</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>819</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            Set mbeans = server.queryNames(gcName, null);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>820</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            if (mbeans != null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>821</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                garbageCollectorMBeans = new ArrayList&lt;GarbageCollectorMXBean>();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>822</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                Iterator iterator = mbeans.iterator();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>823</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                while (iterator.hasNext()) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>824</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    ObjectName on = (ObjectName) iterator.next();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>825</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    String name = GARBAGE_COLLECTOR_MXBEAN_DOMAIN_TYPE +</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>826</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                        ",name=" + on.getKeyProperty("name");</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>828</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    GarbageCollectorMXBean mBean =</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>829</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                        newPlatformMXBeanProxy(server, name,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>830</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                                               GarbageCollectorMXBean.class);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>831</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                        garbageCollectorMBeans.add(mBean);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>832</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>833</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>834</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>835</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return garbageCollectorMBeans;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>836</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>838</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public synchronized MemoryMXBean getMemoryMXBean() throws IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>839</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (hasPlatformMXBeans && memoryMBean == null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>840</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            memoryMBean =</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>841</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                newPlatformMXBeanProxy(server, MEMORY_MXBEAN_NAME,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>842</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                                       MemoryMXBean.class);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>843</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>844</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return memoryMBean;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>845</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>847</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public synchronized RuntimeMXBean getRuntimeMXBean() throws IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>848</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (hasPlatformMXBeans && runtimeMBean == null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>849</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            runtimeMBean =</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>850</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                newPlatformMXBeanProxy(server, RUNTIME_MXBEAN_NAME,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>851</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                                       RuntimeMXBean.class);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>852</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>853</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return runtimeMBean;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>854</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>857</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public synchronized ThreadMXBean getThreadMXBean() throws IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>858</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (hasPlatformMXBeans && threadMBean == null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>859</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            threadMBean =</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>860</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                newPlatformMXBeanProxy(server, THREAD_MXBEAN_NAME,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>861</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                                       ThreadMXBean.class);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>862</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>863</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return threadMBean;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>864</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>866</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public synchronized OperatingSystemMXBean getOperatingSystemMXBean() throws IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>867</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (hasPlatformMXBeans && operatingSystemMBean == null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>868</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            operatingSystemMBean =</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>869</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                newPlatformMXBeanProxy(server, OPERATING_SYSTEM_MXBEAN_NAME,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>870</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                                       OperatingSystemMXBean.class);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>871</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>872</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return operatingSystemMBean;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>873</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>875</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public synchronized com.sun.management.OperatingSystemMXBean</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>876</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        getSunOperatingSystemMXBean() throws IOException {</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>878</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        try {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>879</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            ObjectName on = new ObjectName(OPERATING_SYSTEM_MXBEAN_NAME);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>880</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            if (sunOperatingSystemMXBean == null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>881</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                if (server.isInstanceOf(on,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>882</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                        "com.sun.management.OperatingSystemMXBean")) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>883</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    sunOperatingSystemMXBean =</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>884</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                        newPlatformMXBeanProxy(server,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>885</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                            OPERATING_SYSTEM_MXBEAN_NAME,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>886</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                            com.sun.management.OperatingSystemMXBean.class);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>887</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>888</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>889</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } catch (InstanceNotFoundException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>890</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>             return null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>891</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } catch (MalformedObjectNameException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>892</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>             return null; // should never reach here</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>893</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>894</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return sunOperatingSystemMXBean;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>895</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>897</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public synchronized HotSpotDiagnosticMXBean getHotSpotDiagnosticMXBean() throws IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>898</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (hasHotSpotDiagnosticMXBean && hotspotDiagnosticMXBean == null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>899</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            hotspotDiagnosticMXBean =</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>900</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                newPlatformMXBeanProxy(server, HOTSPOT_DIAGNOSTIC_MXBEAN_NAME,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>901</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                                       HotSpotDiagnosticMXBean.class);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>902</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>903</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return hotspotDiagnosticMXBean;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>904</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>906</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public &lt;T> T getMXBean(ObjectName objName, Class&lt;T> interfaceClass)</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>907</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        throws IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>908</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return newPlatformMXBeanProxy(server,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>909</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                                      objName.toString(),</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>910</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                                      interfaceClass);</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>912</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>914</td><td>&nbsp;</td>
+      <td><pre class='comment'>    // Return thread IDs of deadlocked threads or null if any.</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>915</td><td>&nbsp;</td>
+      <td><pre class='comment'>    // It finds deadlocks involving only monitors if it's a Tiger VM.</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>916</td><td>&nbsp;</td>
+      <td><pre class='comment'>    // Otherwise, it finds deadlocks involving both monitors and</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>917</td><td>&nbsp;</td>
+      <td><pre class='comment'>    // the concurrent locks.</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>918</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public long[] findDeadlockedThreads() throws IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>919</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        ThreadMXBean tm = getThreadMXBean();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>920</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (supportsLockUsage && tm.isSynchronizerUsageSupported()) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>921</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            return tm.findDeadlockedThreads();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>922</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        } else {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>923</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            return tm.findMonitorDeadlockedThreads();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>924</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>925</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>927</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public synchronized void markAsDead() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>928</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        disconnect();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>929</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>931</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public boolean isDead() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>932</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return isDead;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>933</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>935</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    boolean isConnected() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>936</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return !isDead();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>937</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>939</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    boolean hasPlatformMXBeans() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>940</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return this.hasPlatformMXBeans;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>941</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>943</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    boolean hasHotSpotDiagnosticMXBean() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>944</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return this.hasHotSpotDiagnosticMXBean;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>945</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>947</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    boolean isLockUsageSupported() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>948</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return supportsLockUsage;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>949</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>951</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public boolean isRegistered(ObjectName name) throws IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>952</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        return server.isRegistered(name);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>953</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>955</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public void addPropertyChangeListener(PropertyChangeListener listener) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>956</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        propertyChangeSupport.addPropertyChangeListener(listener);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>957</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>959</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public void addWeakPropertyChangeListener(PropertyChangeListener listener) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>960</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (!(listener instanceof WeakPCL)) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>961</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            listener = new WeakPCL(listener);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>962</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>963</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        propertyChangeSupport.addPropertyChangeListener(listener);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>964</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>966</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public void removePropertyChangeListener(PropertyChangeListener listener) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>967</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        if (!(listener instanceof WeakPCL)) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>968</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // Search for the WeakPCL holding this listener (if any)</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>969</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            for (PropertyChangeListener pcl : propertyChangeSupport.getPropertyChangeListeners()) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>970</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                if (pcl instanceof WeakPCL && ((WeakPCL)pcl).get() == listener) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>971</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    listener = pcl;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>972</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    break;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>973</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>974</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>975</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>976</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        propertyChangeSupport.removePropertyChangeListener(listener);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>977</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'></td><td>&nbsp;</td>
+      <td class='comment' onclick='showHideLines(this)'><div>    /**
+     * The PropertyChangeListener is handled via a WeakReference
+     * so as not to pin down the listener.
+     */</div><span>    /*...*/</span></td>
+    </tr>
+    <tr>
+      <td class='line'>983</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    private class WeakPCL extends WeakReference&lt;PropertyChangeListener></pre></td>
+    </tr>
+    <tr>
+      <td class='line'>984</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                          implements PropertyChangeListener {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>985</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        WeakPCL(PropertyChangeListener referent) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>986</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            super(referent);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>987</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>989</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        public void propertyChange(PropertyChangeEvent pce) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>990</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            PropertyChangeListener pcl = get();</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>992</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            if (pcl == null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>993</td><td>&nbsp;</td>
+      <td><pre class='comment'>                // The referent listener was GC'ed, we're no longer</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>994</td><td>&nbsp;</td>
+      <td><pre class='comment'>                // interested in PropertyChanges, remove the listener.</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>995</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                dispose();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>996</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            } else {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>997</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                pcl.propertyChange(pce);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>998</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>999</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>1001</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        private void dispose() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1002</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            removePropertyChangeListener(this);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1003</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1004</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>1006</td><td>&nbsp;</td>
+      <td><pre class='comment'>    //</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1007</td><td>&nbsp;</td>
+      <td><pre class='comment'>    // Snapshot MBeanServerConnection:</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1008</td><td>&nbsp;</td>
+      <td><pre class='comment'>    //</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1009</td><td>&nbsp;</td>
+      <td><pre class='comment'>    // This is an object that wraps an existing MBeanServerConnection and adds</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1010</td><td>&nbsp;</td>
+      <td><pre class='comment'>    // caching to it, as follows:</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1011</td><td>&nbsp;</td>
+      <td><pre class='comment'>    //</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1012</td><td>&nbsp;</td>
+      <td><pre class='comment'>    // - The first time an attribute is called in a given MBean, the result is</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1013</td><td>&nbsp;</td>
+      <td><pre class='comment'>    //   cached. Every subsequent time getAttribute is called for that attribute</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1014</td><td>&nbsp;</td>
+      <td><pre class='comment'>    //   the cached result is returned.</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1015</td><td>&nbsp;</td>
+      <td><pre class='comment'>    //</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1016</td><td>&nbsp;</td>
+      <td><pre class='comment'>    // - Before every call to VMPanel.update() or when the Refresh button in the</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1017</td><td>&nbsp;</td>
+      <td><pre class='comment'>    //   Attributes table is pressed down the attributes cache is flushed. Then</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1018</td><td>&nbsp;</td>
+      <td><pre class='comment'>    //   any subsequent call to getAttribute will retrieve all the values for</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1019</td><td>&nbsp;</td>
+      <td><pre class='comment'>    //   the attributes that are known to the cache.</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1020</td><td>&nbsp;</td>
+      <td><pre class='comment'>    //</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1021</td><td>&nbsp;</td>
+      <td><pre class='comment'>    // - The attributes cache uses a learning approach and only the attributes</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1022</td><td>&nbsp;</td>
+      <td><pre class='comment'>    //   that are in the cache will be retrieved between two subsequent updates.</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1023</td><td>&nbsp;</td>
+      <td><pre class='comment'>    //</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>1025</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public interface SnapshotMBeanServerConnection</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1026</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            extends MBeanServerConnection {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'></td><td>&nbsp;</td>
+      <td class='comment' onclick='showHideLines(this)'><div>        /**
+         * Flush all cached values of attributes.
+         */</div><span>        /*...*/</span></td>
+    </tr>
+    <tr>
+      <td class='line'>1030</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        public void flush();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1031</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>1033</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    public static class Snapshot {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1034</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        private Snapshot() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1035</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1036</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        public static SnapshotMBeanServerConnection</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1037</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                newSnapshot(MBeanServerConnection mbsc) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1038</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            final InvocationHandler ih = new SnapshotInvocationHandler(mbsc);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1039</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            return (SnapshotMBeanServerConnection) Proxy.newProxyInstance(</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1040</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    Snapshot.class.getClassLoader(),</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1041</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    new Class[] {SnapshotMBeanServerConnection.class},</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1042</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    ih);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1043</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1044</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>1046</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    static class SnapshotInvocationHandler implements InvocationHandler {</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>1048</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        private final MBeanServerConnection conn;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1049</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        private Map&lt;ObjectName, NameValueMap> cachedValues = newMap();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1050</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        private Map&lt;ObjectName, Set&lt;String>> cachedNames = newMap();</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>1052</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        @SuppressWarnings("serial")</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1053</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        private static final class NameValueMap</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1054</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                extends HashMap&lt;String, Object> {}</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>1056</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        SnapshotInvocationHandler(MBeanServerConnection conn) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1057</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            this.conn = conn;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1058</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>1060</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        synchronized void flush() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1061</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            cachedValues = newMap();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1062</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>1064</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        public Object invoke(Object proxy, Method method, Object[] args)</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1065</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                throws Throwable {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1066</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            final String methodName = method.getName();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1067</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            if (methodName.equals("getAttribute")) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1068</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                return getAttribute((ObjectName) args[0], (String) args[1]);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1069</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            } else if (methodName.equals("getAttributes")) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1070</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                return getAttributes((ObjectName) args[0], (String[]) args[1]);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1071</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            } else if (methodName.equals("flush")) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1072</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                flush();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1073</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                return null;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1074</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            } else {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1075</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                try {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1076</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    return method.invoke(conn, args);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1077</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                } catch (InvocationTargetException e) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1078</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    throw e.getCause();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1079</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1080</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1081</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>1083</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        private Object getAttribute(ObjectName objName, String attrName)</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1084</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                throws MBeanException, InstanceNotFoundException,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1085</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                AttributeNotFoundException, ReflectionException, IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1086</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            final NameValueMap values = getCachedAttributes(</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1087</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    objName, Collections.singleton(attrName));</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1088</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            Object value = values.get(attrName);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1089</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            if (value != null || values.containsKey(attrName)) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1090</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                return value;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1091</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1092</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // Not in cache, presumably because it was omitted from the</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1093</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // getAttributes result because of an exception.  Following</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1094</td><td>&nbsp;</td>
+      <td><pre class='comment'>            // call will probably provoke the same exception.</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1095</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            return conn.getAttribute(objName, attrName);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1096</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>1098</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        private AttributeList getAttributes(</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1099</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                ObjectName objName, String[] attrNames) throws</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1100</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                InstanceNotFoundException, ReflectionException, IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1101</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            final NameValueMap values = getCachedAttributes(</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1102</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    objName,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1103</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    new TreeSet&lt;String>(Arrays.asList(attrNames)));</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1104</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            final AttributeList list = new AttributeList();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1105</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            for (String attrName : attrNames) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1106</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                final Object value = values.get(attrName);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1107</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                if (value != null || values.containsKey(attrName)) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1108</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    list.add(new Attribute(attrName, value));</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1109</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1110</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1111</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            return list;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1112</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>1114</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        private synchronized NameValueMap getCachedAttributes(</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1115</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                ObjectName objName, Set&lt;String> attrNames) throws</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1116</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                InstanceNotFoundException, ReflectionException, IOException {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1117</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            NameValueMap values = cachedValues.get(objName);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1118</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            if (values != null && values.keySet().containsAll(attrNames)) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1119</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                return values;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1120</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1121</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            attrNames = new TreeSet&lt;String>(attrNames);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1122</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            Set&lt;String> oldNames = cachedNames.get(objName);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1123</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            if (oldNames != null) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1124</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                attrNames.addAll(oldNames);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1125</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1126</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            values = new NameValueMap();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1127</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            final AttributeList attrs = conn.getAttributes(</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1128</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    objName,</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1129</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                    attrNames.toArray(new String[attrNames.size()]));</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1130</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            for (Attribute attr : attrs.asList()) {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1131</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>                values.put(attr.getName(), attr.getValue());</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1132</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1133</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            cachedValues.put(objName, values);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1134</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            cachedNames.put(objName, attrNames);</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1135</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            return values;</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1136</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr><td class='line'></td><td colspan='2'>&nbsp;</td></tr>
+    <tr>
+      <td class='line'>1138</td><td>&nbsp;</td>
+      <td><pre class='comment'>        // See http://www.artima.com/weblogs/viewpost.jsp?thread=79394</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1139</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        private static &lt;K, V> Map&lt;K, V> newMap() {</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1140</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>            return new HashMap&lt;K, V>();</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1141</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>        }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1142</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>    }</pre></td>
+    </tr>
+    <tr>
+      <td class='line'>1143</td><td>&nbsp;</td>
+      <td><pre class='prettyprint'>}</pre></td>
+    </tr>
+  </table>
+</body>
+</html>

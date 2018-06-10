@@ -1,0 +1,42 @@
+{
+  "jvmDatas" : {
+    "1111" : {
+      "gcDatas" : {
+        "1a" : {
+          "collectionTime" : 0,
+          "collectionCount" : 11,
+          "memoryUsed" : 0,
+          "unitTimeCollectionCount" : 0
+        },
+        "1b" : {
+          "collectionTime" : 0,
+          "collectionCount" : 12,
+          "memoryUsed" : 0,
+          "unitTimeCollectionCount" : 0
+        }
+      }
+    },
+    "2222" : {
+      "gcDatas" : {
+        "2a" : {
+          "collectionTime" : 0,
+          "collectionCount" : 21,
+          "memoryUsed" : 0,
+          "unitTimeCollectionCount" : 0
+        },
+        "2b" : {
+          "collectionTime" : 0,
+          "collectionCount" : 22,
+          "memoryUsed" : 0,
+          "unitTimeCollectionCount" : 0
+        },
+        "2c" : {
+          "collectionTime" : 0,
+          "collectionCount" : 23,
+          "memoryUsed" : 0,
+          "unitTimeCollectionCount" : 0
+        }
+      }
+    }
+  }
+}

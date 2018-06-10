@@ -1,0 +1,17 @@
+[ {
+  "metric" : "m1",
+  "endpoint" : "ep1",
+  "timestamp" : 1528616207,
+  "step" : 60,
+  "value" : 123.0,
+  "counterType" : "COUNTER",
+  "tags" : "tag1=a,tag2=b"
+}, {
+  "metric" : "m2",
+  "endpoint" : "ep2",
+  "timestamp" : 1528616207,
+  "step" : 60,
+  "value" : 156789.12,
+  "counterType" : "GAUGE",
+  "tags" : "tag3=a,tag4=b"
+} ]
