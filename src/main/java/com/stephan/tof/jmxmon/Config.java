@@ -2,6 +2,7 @@ package com.stephan.tof.jmxmon;
 
 import java.io.*;
 import java.net.URL;
+import java.util.Properties;
 
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.PropertiesConfiguration;
@@ -30,18 +31,17 @@ public class Config {
 	
 	private Config(){}
 	
-	public void init(String configPath) throws ConfigurationException, IOException{
+	public void init(String configPath) throws  Exception{
 		logger.info("init config");
-		URL resource = this.getClass().getClassLoader().getResource(configPath);
-		PropertiesConfiguration config = new PropertiesConfiguration(resource );
-		config.setThrowExceptionOnMissing(true);
-		
-		this.workDir = config.getString("workDir");
+		InputStream resource = this.getClass().getClassLoader().getResourceAsStream(configPath);
+		Properties config=new Properties();
+		config.load(resource);
+		this.workDir = config.getProperty("workDir");
 		if (new File(workDir).isDirectory() == false) {
 			throw new IllegalArgumentException("workDir is not a directory");
 		}
 		
-		this.hostname = config.getString("hostname", Utils.getHostNameForLinux());
+		this.hostname = config.getProperty("hostname", Utils.getHostNameForLinux());
 		
 		this.jvmContextFile = new File(workDir, "jmxmon.jvm.context.json");
 		
@@ -53,8 +53,9 @@ public class Config {
 			logger.info(jvmContextFile.getAbsolutePath() + " is not exist");
 		}
 		
-		this.agentPostUrl = config.getString("agent.posturl");
-		this.step = config.getInt("step", Constants.defaultStep);
+		this.agentPostUrl = config.getProperty("agent.posturl");
+		String step = config.getProperty("step");
+		this.step = step!=null? Integer.parseInt(step): Constants.defaultStep ;
 		
 		// 默认的jmxHost为localhost，除非通过-D参数设置（线上不建议以远程方式采集，最好每台机器上部署agent，这样agent才能水平伸缩）
 		this.jmxHost = System.getProperty("debug.jmx.host");
@@ -62,7 +63,7 @@ public class Config {
 			this.jmxHost = "localhost";
 		}
 		
-		String[] jmxPortArray = config.getStringArray("jmx.ports");
+		String[] jmxPortArray = config.getProperty("jmx.ports").split(",");
 		jmxPorts = new int[jmxPortArray.length];
 		for (int i = 0; i < jmxPortArray.length; i++) {
 			jmxPorts[i] = Integer.parseInt(jmxPortArray[i]);
