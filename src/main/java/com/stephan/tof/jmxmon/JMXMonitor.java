@@ -25,12 +25,11 @@ public class JMXMonitor {
 	
 	public static void main(String[] args) {
 		try {
-			Config.I.init("conf.properties");
+			Config.I.init( );
 		} catch (Exception e) {
-			logger.error(e.getMessage(), e);
 			throw new IllegalStateException(e);	// 抛出异常便于外部脚本感知
 		}
-		
+
 		ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
 		executor.scheduleAtFixedRate(new Runnable() {
 			@Override

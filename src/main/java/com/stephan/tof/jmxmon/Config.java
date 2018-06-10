@@ -31,17 +31,14 @@ public class Config {
 	
 	private Config(){}
 	
-	public void init(String configPath) throws  Exception{
+	public void init( ) throws  Exception{
 		logger.info("init config");
-		InputStream resource = Config.class.getClassLoader().getResourceAsStream(configPath);
-		Properties config=new Properties();
-		config.load(resource);
-		this.workDir = config.getProperty("workDir");
+		this.workDir ="./";
 		if (new File(workDir).isDirectory() == false) {
 			throw new IllegalArgumentException("workDir is not a directory");
 		}
 		
-		this.hostname = config.getProperty("hostname", Utils.getHostNameForLinux());
+		this.hostname = Utils.getHostNameForLinux();
 		
 		this.jvmContextFile = new File(workDir, "jmxmon.jvm.context.json");
 		
@@ -53,9 +50,8 @@ public class Config {
 			logger.info(jvmContextFile.getAbsolutePath() + " is not exist");
 		}
 		
-		this.agentPostUrl = config.getProperty("agent.posturl");
-		String step = config.getProperty("step");
-		this.step = step!=null? Integer.parseInt(step): Constants.defaultStep ;
+		this.agentPostUrl = "http://kfalcon:1988/v1/push";
+		this.step =   Constants.defaultStep ;
 		
 		// 默认的jmxHost为localhost，除非通过-D参数设置（线上不建议以远程方式采集，最好每台机器上部署agent，这样agent才能水平伸缩）
 		this.jmxHost = System.getProperty("debug.jmx.host");
@@ -63,7 +59,7 @@ public class Config {
 			this.jmxHost = "localhost";
 		}
 		
-		String[] jmxPortArray = config.getProperty("jmx.ports").split(",");
+		String[] jmxPortArray = new String[]{"9996"};
 		jmxPorts = new int[jmxPortArray.length];
 		for (int i = 0; i < jmxPortArray.length; i++) {
 			jmxPorts[i] = Integer.parseInt(jmxPortArray[i]);
