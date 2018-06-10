@@ -33,7 +33,7 @@ public class Config {
 	
 	public void init(String configPath) throws  Exception{
 		logger.info("init config");
-		InputStream resource = this.getClass().getClassLoader().getResourceAsStream(configPath);
+		InputStream resource = Config.class.getClassLoader().getResourceAsStream(configPath);
 		Properties config=new Properties();
 		config.load(resource);
 		this.workDir = config.getProperty("workDir");
