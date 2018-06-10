@@ -25,8 +25,7 @@ public class JMXMonitor {
 	
 	public static void main(String[] args) {
 		try {
-			URL resource = JMXMonitor.class.getClassLoader().getResource("conf.properties");
-			Config.I.init(resource.getPath());
+			Config.I.init("conf.properties");
 		} catch (Exception e) {
 			logger.error(e.getMessage(), e);
 			throw new IllegalStateException(e);	// 抛出异常便于外部脚本感知

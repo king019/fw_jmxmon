@@ -1,7 +1,7 @@
 package com.stephan.tof.jmxmon;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
+import java.net.URL;
 
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.PropertiesConfiguration;
@@ -32,8 +32,8 @@ public class Config {
 	
 	public void init(String configPath) throws ConfigurationException, IOException{
 		logger.info("init config");
-		
-		PropertiesConfiguration config = new PropertiesConfiguration(configPath);
+		URL resource = this.getClass().getClassLoader().getResource(configPath);
+		PropertiesConfiguration config = new PropertiesConfiguration(resource );
 		config.setThrowExceptionOnMissing(true);
 		
 		this.workDir = config.getString("workDir");
